@@ -1,39 +1,46 @@
 // ============================================
-// src/pages/CNG.jsx
+// src/pages/CNG.jsx - COMPLETE PAYSTACK INTEGRATION
 // ============================================
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { usePaystackPayment } from 'react-paystack';
 import AnimatedSection from '../components/ui/AnimatedSection';
 import Card from '../components/ui/Card';
-import { HiCheckCircle, HiMail, HiPhone } from 'react-icons/hi';
+import { HiMail } from 'react-icons/hi';
+import { PAYSTACK_PUBLIC_KEY, amountToKobo, generateReference } from '../utils/paystack';
 import { BANK_DETAILS } from '../utils/constants';
 
 const CNG = () => {
   const [annualForm, setAnnualForm] = useState({
     fullName: '',
     email: '',
+    phone: '',
     currency: 'NGN',
     amount: '5000000',
     customAmount: ''
   });
 
-  const [monthlyForm] = useState({
+  const [monthlyForm, setMonthlyForm] = useState({
     fullName: '',
     email: '',
-    paymentType: 'monthly',
+    phone: '',
     currency: 'NGN',
     amount: '500000',
     customAmount: ''
   });
 
-  const [silverForm] = useState({
+  const [silverForm, setSilverForm] = useState({
     fullName: '',
     email: '',
-    paymentType: 'onetime',
+    phone: '',
     currency: 'NGN',
     amount: '100000',
     customAmount: ''
   });
+
+  const [isProcessingAnnual, setIsProcessingAnnual] = useState(false);
+  const [isProcessingMonthly, setIsProcessingMonthly] = useState(false);
+  const [isProcessingSilver, setIsProcessingSilver] = useState(false);
 
   const benefits = [
     {
@@ -58,22 +65,234 @@ const CNG = () => {
     }
   ];
 
+  // Payment success handler
+  const handlePaymentSuccess = async (reference, formData, paymentType, setProcessing) => {
+    setProcessing(true);
+    
+    try {
+      const response = await fetch('http://localhost:3001/api/payments/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reference: reference.reference,
+          formData: formData,
+          paymentType: paymentType,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`🎉 Thank you for your generous contribution!\n\nPayment successful!\nReference: ${reference.reference}\n\nA confirmation email has been sent to ${formData.email}`);
+        return true;
+      } else {
+        alert('Payment successful but verification failed. Please contact us with your reference: ' + reference.reference);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Payment successful! However, we encountered an error sending confirmation. Please save this reference: ' + reference.reference);
+      return false;
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // ANNUAL PAYMENT SETUP
+  const annualPaystackConfig = {
+    reference: generateReference('CNG-ANNUAL'),
+    email: annualForm.email,
+    amount: amountToKobo(annualForm.customAmount || annualForm.amount),
+    currency: annualForm.currency,
+    publicKey: PAYSTACK_PUBLIC_KEY,
+    metadata: {
+      custom_fields: [
+        {
+          display_name: "Full Name",
+          variable_name: "full_name",
+          value: annualForm.fullName
+        },
+        {
+          display_name: "Phone",
+          variable_name: "phone",
+          value: annualForm.phone
+        },
+        {
+          display_name: "Payment Type",
+          variable_name: "payment_type",
+          value: "CNG Annual Donation"
+        }
+      ]
+    },
+  };
+
+  const initializeAnnualPayment = usePaystackPayment(annualPaystackConfig);
+
   const handleAnnualSubmit = (e) => {
     e.preventDefault();
-    console.log('Annual donation:', annualForm);
-    // Integrate Paystack here
+    
+    if (!annualForm.fullName || !annualForm.email || !annualForm.phone) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    const amount = parseFloat(annualForm.customAmount || annualForm.amount);
+    const minAmount = annualForm.currency === 'NGN' ? 1000000 : 1000;
+    
+    if (amount < minAmount) {
+      alert(`Minimum amount is ${annualForm.currency === 'NGN' ? '₦1,000,000' : '$1,000'}`);
+      return;
+    }
+
+    initializeAnnualPayment(
+      (reference) => {
+        handlePaymentSuccess(reference, annualForm, 'CNG Annual Donation', setIsProcessingAnnual).then(success => {
+          if (success) {
+            setAnnualForm({
+              fullName: '',
+              email: '',
+              phone: '',
+              currency: 'NGN',
+              amount: '5000000',
+              customAmount: ''
+            });
+          }
+        });
+      },
+      () => console.log('Payment cancelled')
+    );
   };
+
+  // MONTHLY PAYMENT SETUP
+  const monthlyPaystackConfig = {
+    reference: generateReference('CNG-MONTHLY'),
+    email: monthlyForm.email,
+    amount: amountToKobo(monthlyForm.customAmount || monthlyForm.amount),
+    currency: monthlyForm.currency,
+    publicKey: PAYSTACK_PUBLIC_KEY,
+    metadata: {
+      custom_fields: [
+        {
+          display_name: "Full Name",
+          variable_name: "full_name",
+          value: monthlyForm.fullName
+        },
+        {
+          display_name: "Phone",
+          variable_name: "phone",
+          value: monthlyForm.phone
+        },
+        {
+          display_name: "Payment Type",
+          variable_name: "payment_type",
+          value: "CNG Monthly Donation"
+        }
+      ]
+    },
+  };
+
+  const initializeMonthlyPayment = usePaystackPayment(monthlyPaystackConfig);
 
   const handleMonthlySubmit = (e) => {
     e.preventDefault();
-    console.log('Monthly donation:', monthlyForm);
-    // Integrate Paystack here
+    
+    if (!monthlyForm.fullName || !monthlyForm.email || !monthlyForm.phone) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    const amount = parseFloat(monthlyForm.customAmount || monthlyForm.amount);
+    const minAmount = monthlyForm.currency === 'NGN' ? 500000 : 500;
+    
+    if (amount < minAmount) {
+      alert(`Minimum amount is ${monthlyForm.currency === 'NGN' ? '₦500,000' : '$500'}`);
+      return;
+    }
+
+    initializeMonthlyPayment(
+      (reference) => {
+        handlePaymentSuccess(reference, monthlyForm, 'CNG Monthly Donation', setIsProcessingMonthly).then(success => {
+          if (success) {
+            setMonthlyForm({
+              fullName: '',
+              email: '',
+              phone: '',
+              currency: 'NGN',
+              amount: '500000',
+              customAmount: ''
+            });
+          }
+        });
+      },
+      () => console.log('Payment cancelled')
+    );
   };
+
+  // SILVER PARTNER PAYMENT SETUP
+  const silverPaystackConfig = {
+    reference: generateReference('CNG-SILVER'),
+    email: silverForm.email,
+    amount: amountToKobo(silverForm.customAmount || silverForm.amount),
+    currency: silverForm.currency,
+    publicKey: PAYSTACK_PUBLIC_KEY,
+    metadata: {
+      custom_fields: [
+        {
+          display_name: "Full Name",
+          variable_name: "full_name",
+          value: silverForm.fullName
+        },
+        {
+          display_name: "Phone",
+          variable_name: "phone",
+          value: silverForm.phone
+        },
+        {
+          display_name: "Payment Type",
+          variable_name: "payment_type",
+          value: "CNG Silver Partner"
+        }
+      ]
+    },
+  };
+
+  const initializeSilverPayment = usePaystackPayment(silverPaystackConfig);
 
   const handleSilverSubmit = (e) => {
     e.preventDefault();
-    console.log('Silver donation:', silverForm);
-    // Integrate Paystack here
+    
+    if (!silverForm.fullName || !silverForm.email || !silverForm.phone) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    const amount = parseFloat(silverForm.customAmount || silverForm.amount);
+    const minAmount = silverForm.currency === 'NGN' ? 100000 : 100;
+    
+    if (amount < minAmount) {
+      alert(`Minimum amount is ${silverForm.currency === 'NGN' ? '₦100,000' : '$100'}`);
+      return;
+    }
+
+    initializeSilverPayment(
+      (reference) => {
+        handlePaymentSuccess(reference, silverForm, 'CNG Silver Partner', setIsProcessingSilver).then(success => {
+          if (success) {
+            setSilverForm({
+              fullName: '',
+              email: '',
+              phone: '',
+              currency: 'NGN',
+              amount: '100000',
+              customAmount: ''
+            });
+          }
+        });
+      },
+      () => console.log('Payment cancelled')
+    );
   };
 
   return (
@@ -188,7 +407,7 @@ const CNG = () => {
 
               <form onSubmit={handleAnnualSubmit} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Full Name</label>
+                  <label className="block text-sm font-semibold mb-2">Full Name *</label>
                   <input
                     type="text"
                     value={annualForm.fullName}
@@ -199,7 +418,7 @@ const CNG = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Email Address</label>
+                  <label className="block text-sm font-semibold mb-2">Email Address *</label>
                   <input
                     type="email"
                     value={annualForm.email}
@@ -210,10 +429,14 @@ const CNG = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Payment Type</label>
-                  <div className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-smartan-gray">
-                    One-time Payment
-                  </div>
+                  <label className="block text-sm font-semibold mb-2">Phone Number *</label>
+                  <input
+                    type="tel"
+                    value={annualForm.phone}
+                    onChange={(e) => setAnnualForm({...annualForm, phone: e.target.value})}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
+                    required
+                  />
                 </div>
 
                 <div>
@@ -271,25 +494,30 @@ const CNG = () => {
 
                 <div>
                   <label className="block text-sm font-semibold mb-2">
-                    OR Custom Amount ({annualForm.currency === 'NGN' ? '₦' : '$'}) - Min: {annualForm.currency === 'NGN' ? '₦1,000' : '$100'}
+                    OR Custom Amount - Min: {annualForm.currency === 'NGN' ? '₦1,000,000' : '$1,000'}
                   </label>
                   <input
                     type="number"
                     value={annualForm.customAmount}
                     onChange={(e) => setAnnualForm({...annualForm, customAmount: e.target.value, amount: ''})}
-                    placeholder={annualForm.currency === 'NGN' ? '₦5,000,000' : '$5,000'}
+                    placeholder={annualForm.currency === 'NGN' ? '5000000' : '5000'}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
                   />
                 </div>
 
                 <motion.button
                   type="submit"
-                  className="w-full px-8 py-4 bg-gradient-to-r from-smartan-orange to-smartan-pink rounded-full font-semibold text-lg"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  disabled={isProcessingAnnual}
+                  className="w-full px-8 py-4 bg-gradient-to-r from-smartan-orange to-smartan-pink rounded-full font-semibold text-lg disabled:opacity-50"
+                  whileHover={{ scale: isProcessingAnnual ? 1 : 1.02 }}
+                  whileTap={{ scale: isProcessingAnnual ? 1 : 0.98 }}
                 >
-                  Make Your Annual Donation
+                  {isProcessingAnnual ? 'Processing...' : 'Make Your Annual Donation'}
                 </motion.button>
+                
+                <p className="text-center text-sm text-smartan-gray">
+                  🔒 Secure payment powered by Paystack
+                </p>
               </form>
             </motion.div>
           </div>
@@ -309,37 +537,96 @@ const CNG = () => {
               <h2 className="text-3xl font-display font-bold mb-2 text-center">
                 Join Our CNG <span className="text-gradient">Monthly</span>
               </h2>
-              <p className="text-smartan-gray text-center mb-8">Monthly recurring or one-time contribution</p>
+              <p className="text-smartan-gray text-center mb-8">Monthly recurring contribution</p>
 
               <form onSubmit={handleMonthlySubmit} className="space-y-6">
-                {/* Similar form structure as annual with monthly specific options */}
-                {/* Abbreviated for space - follow same pattern as annual form */}
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Full Name</label>
+                  <label className="block text-sm font-semibold mb-2">Full Name *</label>
                   <input
                     type="text"
+                    value={monthlyForm.fullName}
+                    onChange={(e) => setMonthlyForm({...monthlyForm, fullName: e.target.value})}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
                     required
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Email Address</label>
+                  <label className="block text-sm font-semibold mb-2">Email Address *</label>
                   <input
                     type="email"
+                    value={monthlyForm.email}
+                    onChange={(e) => setMonthlyForm({...monthlyForm, email: e.target.value})}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
                     required
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Phone Number *</label>
+                  <input
+                    type="tel"
+                    value={monthlyForm.phone}
+                    onChange={(e) => setMonthlyForm({...monthlyForm, phone: e.target.value})}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Currency</label>
+                  <div className="flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setMonthlyForm({...monthlyForm, currency: 'NGN'})}
+                      className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all ${
+                        monthlyForm.currency === 'NGN'
+                          ? 'bg-gradient-to-r from-smartan-orange to-smartan-pink'
+                          : 'bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      Naira (₦)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMonthlyForm({...monthlyForm, currency: 'USD'})}
+                      className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all ${
+                        monthlyForm.currency === 'USD'
+                          ? 'bg-gradient-to-r from-smartan-orange to-smartan-pink'
+                          : 'bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      Dollar ($)
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">
+                    Monthly Amount - Min: {monthlyForm.currency === 'NGN' ? '₦500,000' : '$500'}
+                  </label>
+                  <input
+                    type="number"
+                    value={monthlyForm.customAmount || monthlyForm.amount}
+                    onChange={(e) => setMonthlyForm({...monthlyForm, customAmount: e.target.value})}
+                    placeholder={monthlyForm.currency === 'NGN' ? '500000' : '500'}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
+                  />
+                </div>
+
                 <motion.button
                   type="submit"
-                  className="w-full px-8 py-4 bg-gradient-to-r from-smartan-orange to-smartan-pink rounded-full font-semibold text-lg"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  disabled={isProcessingMonthly}
+                  className="w-full px-8 py-4 bg-gradient-to-r from-smartan-orange to-smartan-pink rounded-full font-semibold text-lg disabled:opacity-50"
+                  whileHover={{ scale: isProcessingMonthly ? 1 : 1.02 }}
+                  whileTap={{ scale: isProcessingMonthly ? 1 : 0.98 }}
                 >
-                  Make Your Donation
+                  {isProcessingMonthly ? 'Processing...' : 'Make Your Monthly Donation'}
                 </motion.button>
+
+                <p className="text-center text-sm text-smartan-gray">
+                  🔒 Secure payment powered by Paystack
+                </p>
               </form>
             </motion.div>
           </div>
@@ -359,18 +646,96 @@ const CNG = () => {
               <h2 className="text-3xl font-display font-bold mb-2 text-center">
                 CNG <span className="text-gradient">Silver Partner</span>
               </h2>
-              <p className="text-smartan-gray text-center mb-8">Flexible contribution options</p>
+              <p className="text-smartan-gray text-center mb-8">One-time contribution</p>
 
               <form onSubmit={handleSilverSubmit} className="space-y-6">
-                {/* Similar structure - abbreviated */}
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Full Name *</label>
+                  <input
+                    type="text"
+                    value={silverForm.fullName}
+                    onChange={(e) => setSilverForm({...silverForm, fullName: e.target.value})}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Email Address *</label>
+                  <input
+                    type="email"
+                    value={silverForm.email}
+                    onChange={(e) => setSilverForm({...silverForm, email: e.target.value})}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Phone Number *</label>
+                  <input
+                    type="tel"
+                    value={silverForm.phone}
+                    onChange={(e) => setSilverForm({...silverForm, phone: e.target.value})}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Currency</label>
+                  <div className="flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setSilverForm({...silverForm, currency: 'NGN'})}
+                      className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all ${
+                        silverForm.currency === 'NGN'
+                          ? 'bg-gradient-to-r from-smartan-orange to-smartan-pink'
+                          : 'bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      Naira (₦)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSilverForm({...silverForm, currency: 'USD'})}
+                      className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all ${
+                        silverForm.currency === 'USD'
+                          ? 'bg-gradient-to-r from-smartan-orange to-smartan-pink'
+                          : 'bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      Dollar ($)
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">
+                    Amount - Min: {silverForm.currency === 'NGN' ? '₦100,000' : '$100'}
+                  </label>
+                  <input
+                    type="number"
+                    value={silverForm.customAmount || silverForm.amount}
+                    onChange={(e) => setSilverForm({...silverForm, customAmount: e.target.value})}
+                    placeholder={silverForm.currency === 'NGN' ? '100000' : '100'}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:border-smartan-orange focus:outline-none"
+                  />
+                </div>
+
                 <motion.button
                   type="submit"
-                  className="w-full px-8 py-4 bg-gradient-to-r from-smartan-orange to-smartan-pink rounded-full font-semibold text-lg"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  disabled={isProcessingSilver}
+                  className="w-full px-8 py-4 bg-gradient-to-r from-smartan-orange to-smartan-pink rounded-full font-semibold text-lg disabled:opacity-50"
+                  whileHover={{ scale: isProcessingSilver ? 1 : 1.02 }}
+                  whileTap={{ scale: isProcessingSilver ? 1 : 0.98 }}
                 >
-                  Make Your Donation
+                  {isProcessingSilver ? 'Processing...' : 'Make Your Donation'}
                 </motion.button>
+
+                <p className="text-center text-sm text-smartan-gray">
+                  🔒 Secure payment powered by Paystack
+                </p>
               </form>
             </motion.div>
           </div>
@@ -446,7 +811,7 @@ const CNG = () => {
             <div className="glass-effect inline-block px-8 py-4 rounded-2xl">
               <p className="text-smartan-gray mb-2">Need assistance with your donation?</p>
               <div className="flex items-center justify-center gap-6">
-                <a href="mailto:smartanhouse@gmail.com" className="flex items-center gap-2 text-smartan-orange hover:text-smartan-pink transition-colors">
+                <a href="mailto:thesmartanhouse@gmail.com" className="flex items-center gap-2 text-smartan-orange hover:text-smartan-pink transition-colors">
                   <HiMail className="w-5 h-5" />
                   thesmartanhouse@gmail.com
                 </a>

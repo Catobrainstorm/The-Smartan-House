@@ -1,11 +1,13 @@
 // ============================================
-// src/pages/Consortium.jsx
+// src/pages/Consortium.jsx - COMPLETE PAYSTACK INTEGRATION
 // ============================================
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { usePaystackPayment } from 'react-paystack';
 import AnimatedSection from '../components/ui/AnimatedSection';
 import Card from '../components/ui/Card';
 import { HiLightningBolt, HiGlobe, HiUserGroup, HiCube } from 'react-icons/hi';
+import { PAYSTACK_PUBLIC_KEY, amountToKobo, generateReference } from '../utils/paystack';
 
 const Consortium = () => {
   const [formData, setFormData] = useState({
@@ -17,49 +19,152 @@ const Consortium = () => {
     amount: '20000'
   });
 
+  const [isProcessing, setIsProcessing] = useState(false);
+
   const projects = [
     {
-      icon: HiLightningBolt,
-      title: 'Sustainable Energy Revolution',
+      icon: HiGlobe,
+      title: 'Prestigious 1000',
       description: 'Developing next-generation renewable energy solutions that will power the world sustainably by 2045.',
       image: '/api/placeholder/600/400',
-      impact: '1M+ Lives'
+      impact: '1k+ Lives'
     },
-    {
-      icon: HiGlobe,
-      title: 'Digital Africa Initiative',
-      description: 'Bridging the digital divide across Africa through innovative technology solutions and infrastructure.',
-      image: '/api/placeholder/600/400',
-      impact: '50+ Countries'
-    },
-    {
-      icon: HiUserGroup,
-      title: 'Youth Leadership Program',
-      description: 'Empowering young leaders with skills and resources to drive transformative change in their communities.',
-      image: '/api/placeholder/600/400',
-      impact: '100K+ Leaders'
-    },
-    {
-      icon: HiCube,
-      title: 'Innovation Hubs Network',
-      description: 'Creating collaborative spaces where innovators can develop solutions to Africa\'s most pressing challenges.',
-      image: '/api/placeholder/600/400',
-      impact: '20+ Hubs'
-    }
+    // {
+    //   icon: HiLightningBolt,
+    //   title: 'Digital Africa Initiative',
+    //   description: 'Bridging the digital divide across Africa through innovative technology solutions and infrastructure.',
+    //   image: '/api/placeholder/600/400',
+    //   impact: '50+ Countries'
+    // },
+    // {
+    //   icon: HiUserGroup,
+    //   title: 'Youth Leadership Program',
+    //   description: 'Empowering young leaders with skills and resources to drive transformative change in their communities.',
+    //   image: '/api/placeholder/600/400',
+    //   impact: '100K+ Leaders'
+    // },
+    // {
+    //   icon: HiCube,
+    //   title: 'Innovation Hubs Network',
+    //   description: 'Creating collaborative spaces where innovators can develop solutions to Africa\'s most pressing challenges.',
+    //   image: '/api/placeholder/600/400',
+    //   impact: '20+ Hubs'
+    // }
   ];
+
+  // Paystack configuration
+  const paystackConfig = {
+    reference: generateReference('CONSORTIUM'),
+    email: formData.email,
+    amount: amountToKobo(formData.amount),
+    currency: formData.currency,
+    publicKey: PAYSTACK_PUBLIC_KEY,
+    metadata: {
+      custom_fields: [
+        {
+          display_name: "Full Name",
+          variable_name: "full_name",
+          value: formData.fullName
+        },
+        {
+          display_name: "Phone",
+          variable_name: "phone",
+          value: formData.phone
+        },
+        {
+          display_name: "LinkedIn",
+          variable_name: "linkedin",
+          value: formData.linkedin || 'N/A'
+        },
+        {
+          display_name: "Membership Type",
+          variable_name: "membership_type",
+          value: "2045 Consortium Monthly"
+        }
+      ]
+    },
+  };
+
+  // Initialize Paystack payment
+  const initializePayment = usePaystackPayment(paystackConfig);
+
+  // Success callback
+  const onSuccess = async (reference) => {
+    setIsProcessing(true);
+    console.log('Payment successful:', reference);
+    
+    try {
+      // Verify payment with your backend
+      const response = await fetch('http://localhost:3001/api/payments/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reference: reference.reference,
+          formData: formData,
+          paymentType: '2045 Consortium Monthly Membership',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`🎉 Welcome to the 2045 Consortium!\n\nPayment successful!\nReference: ${reference.reference}\n\nA confirmation email has been sent to ${formData.email}`);
+        
+        // Reset form
+        setFormData({
+          fullName: '',
+          email: '',
+          phone: '',
+          linkedin: '',
+          currency: 'NGN',
+          amount: '20000'
+        });
+      } else {
+        alert('Payment successful but verification failed. Please contact us with your reference: ' + reference.reference);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Payment successful! However, we encountered an error sending confirmation. Please save this reference: ' + reference.reference);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Close callback
+  const onClose = () => {
+    console.log('Payment popup closed');
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log('Consortium membership:', formData);
-    // Integrate Paystack payment here
-    alert('Payment integration will be added here. Form data logged to console.');
+    
+    // Validation
+    if (!formData.fullName || !formData.email || !formData.phone) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    if (!formData.email.includes('@')) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
+    const minAmount = formData.currency === 'NGN' ? 20000 : 10;
+    if (parseFloat(formData.amount) < minAmount) {
+      alert(`Minimum contribution is ${formData.currency === 'NGN' ? '₦20,000' : '$10'}`);
+      return;
+    }
+
+    // Initialize payment
+    initializePayment(onSuccess, onClose);
   };
 
   return (
     <div className="pt-24">
       {/* Hero Section */}
       <AnimatedSection className="py-24 bg-gradient-to-b from-smartan-navy via-smartan-navy/95 to-smartan-navy relative overflow-hidden">
-        {/* Animated Background */}
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-20 left-20 w-96 h-96 bg-smartan-purple/40 rounded-full blur-3xl animate-pulse" />
           <div className="absolute bottom-20 right-20 w-96 h-96 bg-smartan-blue/40 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
@@ -195,7 +300,6 @@ const Consortium = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Monthly Membership Badge */}
                 <div className="bg-gradient-to-r from-smartan-purple/20 to-smartan-blue/20 rounded-2xl p-6 border border-smartan-purple/30">
                   <div className="flex items-center justify-between">
                     <div>
@@ -206,7 +310,6 @@ const Consortium = () => {
                   </div>
                 </div>
 
-                {/* Form Fields */}
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">
@@ -268,7 +371,7 @@ const Consortium = () => {
                   <div className="flex gap-4">
                     <button
                       type="button"
-                      onClick={() => setFormData({...formData, currency: 'NGN'})}
+                      onClick={() => setFormData({...formData, currency: 'NGN', amount: '20000'})}
                       className={`flex-1 px-6 py-4 rounded-xl font-semibold transition-all ${
                         formData.currency === 'NGN'
                           ? 'bg-gradient-to-r from-smartan-purple to-smartan-blue'
@@ -281,7 +384,7 @@ const Consortium = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFormData({...formData, currency: 'USD'})}
+                      onClick={() => setFormData({...formData, currency: 'USD', amount: '10'})}
                       className={`flex-1 px-6 py-4 rounded-xl font-semibold transition-all ${
                         formData.currency === 'USD'
                           ? 'bg-gradient-to-r from-smartan-purple to-smartan-blue'
@@ -312,7 +415,6 @@ const Consortium = () => {
                   </p>
                 </div>
 
-                {/* Summary Card */}
                 <div className="bg-gradient-to-r from-smartan-purple/10 to-smartan-blue/10 rounded-2xl p-6 border border-smartan-purple/30">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-smartan-gray">Monthly Contribution</span>
@@ -327,14 +429,14 @@ const Consortium = () => {
                   </div>
                 </div>
 
-                {/* Submit Button */}
                 <motion.button
                   type="submit"
-                  className="w-full px-8 py-5 bg-gradient-to-r from-smartan-purple to-smartan-blue rounded-full font-semibold text-xl flex items-center justify-center gap-3"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  disabled={isProcessing}
+                  className="w-full px-8 py-5 bg-gradient-to-r from-smartan-purple to-smartan-blue rounded-full font-semibold text-xl flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                  whileHover={{ scale: isProcessing ? 1 : 1.02 }}
+                  whileTap={{ scale: isProcessing ? 1 : 0.98 }}
                 >
-                  <span>Join 2045 Consortium - Start Monthly Membership</span>
+                  <span>{isProcessing ? 'Processing...' : 'Join 2045 Consortium - Start Monthly Membership'}</span>
                 </motion.button>
 
                 <p className="text-center text-sm text-smartan-gray">

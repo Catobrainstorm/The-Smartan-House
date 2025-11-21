@@ -20,6 +20,7 @@
     "react-dom": "^19.2.0",
     "react-icons": "^5.5.0",
     "react-intersection-observer": "^10.0.0",
+    "react-paystack": "^6.0.0",
     "react-router-dom": "^7.9.6",
     "react-youtube": "^10.1.0",
     "run": "^1.5.0",
